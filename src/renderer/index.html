@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- worker-src blob: is required: the SmartSpectra renderer SDK runs a Web Worker from a blob: URL. -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; worker-src 'self' blob:; connect-src 'self'"
+  />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calm Desk</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Calm Desk</span></div>
+    <div class="pills">
+      <span id="pill-sim" class="pill pill-warn" hidden>Simulated signals · not a measurement</span>
+      <span id="pill-camera" class="pill" data-on="false"><span class="dot" aria-hidden="true"></span><span id="pill-camera-text">Camera off</span></span>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" role="alert" hidden>
+    <span id="banner-text"></span>
+    <span class="banner-actions">
+      <button id="banner-retry" class="btn small" hidden>Try again</button>
+      <button id="banner-close" class="btn small ghost">Dismiss</button>
+    </span>
+  </div>
+
+  <main id="main">
+    <!-- 1. Consent -->
+    <section id="screen-consent" class="screen" aria-labelledby="consent-title">
+      <div class="card narrow">
+        <h1 id="consent-title">Two calm minutes, guided by your own breathing</h1>
+        <p class="lede">
+          Calm Desk uses your webcam and the Presage SmartSpectra SDK to read your pulse, breathing and
+          heart-rate variability while you follow a breathing guide.
+        </p>
+
+        <div class="info-grid">
+          <div class="info">
+            <h2>Your camera</h2>
+            <p>Turns on only when you press the button below, and turns off when the session ends or you stop it.</p>
+          </div>
+          <div class="info">
+            <h2>Your video</h2>
+            <p>
+              Calm Desk never records or saves video or images. The SmartSpectra SDK processes camera frames and
+              contacts Presage's service to authenticate and meter usage; Presage's Telemetry and Privacy page
+              describes exactly what is sent.
+            </p>
+          </div>
+          <div class="info">
+            <h2>Your numbers</h2>
+            <p>
+              Readings stay in memory for this session only. Nothing is written to disk unless you choose
+              "Save summary" at the end. Finishing discards everything.
+            </p>
+          </div>
+          <div class="info">
+            <h2>Not medical</h2>
+            <p>This is a relaxation aid, not a medical device. It can't diagnose anything or advise on your health.</p>
+          </div>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="opt-expression" />
+          <span>
+            <strong>Also show my facial expression</strong> (optional, off by default). Turning this on asks the
+            SDK for additional face analysis.
+          </span>
+        </label>
+        <p class="meta" id="telemetry-note"></p>
+
+        <label class="check required">
+          <input type="checkbox" id="opt-consent" />
+          <span>I understand the above, I'm the only person on camera, and I agree to turn on my camera for this session.</span>
+        </label>
+
+        <div class="actions">
+          <button id="btn-start-camera" class="btn primary" disabled>Turn on camera</button>
+        </div>
+        <p class="meta" id="config-note" role="status"></p>
+      </div>
+    </section>
+
+    <!-- 2. Setup -->
+    <section id="screen-setup" class="screen" aria-labelledby="setup-title" hidden>
+      <div class="card">
+        <h1 id="setup-title">Get comfortable</h1>
+        <div class="setup-grid">
+          <div class="preview">
+            <video id="preview" playsinline muted autoplay></video>
+            <div id="preview-sim" class="preview-sim" hidden>
+              <strong>Simulated signals</strong>
+              <small>No camera in use</small>
+            </div>
+          </div>
+          <div class="setup-side">
+            <p id="setup-hint" class="hint" role="status" aria-live="polite">Starting camera…</p>
+            <ul class="tips">
+              <li>Sit about an arm's length from the screen, facing it.</li>
+              <li>Keep your face and shoulders in frame, with light on your face.</li>
+              <li>Rest your hands and breathe naturally. Try not to talk.</li>
+            </ul>
+            <div class="actions">
+              <button id="btn-begin" class="btn primary" disabled>Begin session</button>
+              <button id="btn-stop-setup" class="btn ghost">Turn camera off</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Session -->
+    <section id="screen-session" class="screen" aria-labelledby="session-title" hidden>
+      <h1 id="session-title" class="sr-only">Breathing session</h1>
+      <div class="session">
+        <div class="pacer-wrap">
+          <canvas id="pacer" aria-hidden="true"></canvas>
+          <div class="pacer-text">
+            <div id="pacer-phase" class="phase">Breathe in</div>
+            <div id="pacer-time" class="time">2:00</div>
+          </div>
+        </div>
+
+        <div class="side">
+          <div class="tiles">
+            <div class="tile" id="tile-pulse">
+              <div class="tile-label">Pulse</div>
+              <div class="tile-value"><span id="v-pulse">--</span><span class="unit">bpm</span></div>
+              <div class="tile-sub" id="s-pulse">Waiting for signal…</div>
+            </div>
+            <div class="tile" id="tile-breath">
+              <div class="tile-label">Breathing</div>
+              <div class="tile-value"><span id="v-breath">--</span><span class="unit">per min</span></div>
+              <div class="tile-sub" id="s-breath">Waiting for signal…</div>
+            </div>
+            <div class="tile" id="tile-hrv">
+              <div class="tile-label">HRV (RMSSD)</div>
+              <div class="tile-value"><span id="v-hrv">--</span><span class="unit">ms</span></div>
+              <div class="tile-sub" id="s-hrv">Needs about a minute…</div>
+            </div>
+            <div class="tile" id="tile-expression" hidden>
+              <div class="tile-label">Expression</div>
+              <div class="tile-value"><span id="v-expression">--</span></div>
+              <div class="tile-sub" id="s-expression">Waiting for signal…</div>
+            </div>
+          </div>
+
+          <div class="charts">
+            <figure>
+              <figcaption>Breathing movement</figcaption>
+              <canvas id="chart-breath" aria-label="Live breathing movement trace" role="img"></canvas>
+            </figure>
+            <figure>
+              <figcaption>Pulse waveform</figcaption>
+              <canvas id="chart-pulse" aria-label="Live pulse waveform" role="img"></canvas>
+            </figure>
+          </div>
+
+          <p id="session-hint" class="hint small" role="status" aria-live="polite" hidden></p>
+          <div class="actions">
+            <button id="btn-end" class="btn ghost">End early</button>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        The ring is your guide: breathe in as it grows, out as it shrinks. The warm glow follows your own chest movement.
+      </p>
+    </section>
+
+    <!-- 4. Summary -->
+    <section id="screen-summary" class="screen" aria-labelledby="summary-title" hidden>
+      <div class="card narrow">
+        <h1 id="summary-title">Session complete</h1>
+        <p class="lede" id="summary-lede"></p>
+        <div class="summary-grid" id="summary-grid"></div>
+        <p class="meta">
+          A wellness reflection only, not a medical measurement. Your camera is off and nothing has been saved.
+          Changes smaller than the measurement's typical error are reported as "about the same".
+        </p>
+        <div class="actions">
+          <button id="btn-save" class="btn">Save summary…</button>
+          <button id="btn-finish" class="btn primary">Finish &amp; discard data</button>
+        </div>
+        <p id="save-status" class="meta" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
