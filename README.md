@@ -28,7 +28,7 @@ Readings flagged `stable` by the SDK are shown as "Steady"; others are dimmed an
 **Requirements:** Node.js 20+ (Node 22+ to run `npm test`; the SDK recommends Node 24 LTS), a webcam, and an API key from [physiology.presagetech.com](https://physiology.presagetech.com/). Supported platforms are those of the SDK's native runtime: macOS Apple Silicon, Linux x64/arm64 (glibc 2.35+), Windows x64.
 
 ```bash
-git clone <this repo>
+git clone https://github.com/SenalDilanka/calm-desk.git
 cd calm-desk
 npm install            # also downloads the SDK's native runtimes for every platform (a few hundred MB)
 cp .env.example .env   # then put your key in SMARTSPECTRA_API_KEY
